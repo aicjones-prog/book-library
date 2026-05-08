@@ -25,6 +25,12 @@ function initFirebase() {
       renderBooks();
     }
   });
+  // Handle redirect result for mobile sign-in
+  auth.getRedirectResult().catch(err => {
+    if (err.code && err.code !== 'auth/no-auth-event') {
+      showToast("登入失敗：" + err.message, "error");
+    }
+  });
   subscribeToBorows();
 }
 
@@ -40,10 +46,27 @@ function subscribeToBorows() {
 }
 
 // ── Auth ────────────────────────────────────────────────────
+function isEmbeddedBrowser() {
+  return /Line|FBAN|FBAV|Instagram|MicroMessenger|WeChat/i.test(navigator.userAgent);
+}
+function isMobileBrowser() {
+  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+
 function signIn() {
   if (!FIREBASE_CONFIGURED) { showToast("請先完成 Firebase 設定（見 README）", "warn"); return; }
-  auth.signInWithPopup(new firebase.auth.GoogleAuthProvider())
-    .catch(err => showToast("登入失敗：" + err.message, "error"));
+  if (isEmbeddedBrowser()) {
+    showToast("請用 Safari 或 Chrome 開啟本頁後再登入", "warn");
+    return;
+  }
+  const provider = new firebase.auth.GoogleAuthProvider();
+  if (isMobileBrowser()) {
+    auth.signInWithRedirect(provider)
+      .catch(err => showToast("登入失敗：" + err.message, "error"));
+  } else {
+    auth.signInWithPopup(provider)
+      .catch(err => showToast("登入失敗：" + err.message, "error"));
+  }
 }
 
 function signOut() {
