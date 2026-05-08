@@ -4,6 +4,8 @@ let db = null;
 let auth = null;
 let borrowStatus = {};
 let activeFilter = "all";
+let currentPage = 1;
+const BOOKS_PER_PAGE = 20;
 let unsubscribeBorrows = null;
 const coverCache = JSON.parse(localStorage.getItem("bookCovers") || "{}");
 
@@ -160,10 +162,34 @@ function applyBookCover(bookId, url) {
 // ── Filter ──────────────────────────────────────────────────
 function filterBooks(genre) {
   activeFilter = genre;
+  currentPage = 1;
   document.querySelectorAll(".filter-btn").forEach(btn => btn.classList.remove("active"));
   event.target.classList.add("active");
   renderBooks();
   setTimeout(loadAllCovers, 50);
+}
+
+// ── Pagination ──────────────────────────────────────────────
+function goPage(n) {
+  currentPage = n;
+  renderBooks();
+  setTimeout(loadAllCovers, 50);
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function renderPagination(total) {
+  const pag = document.getElementById("pagination");
+  if (!pag) return;
+  const totalPages = Math.ceil(total / BOOKS_PER_PAGE);
+  if (totalPages <= 1) { pag.innerHTML = ""; return; }
+
+  let html = `<button class="page-btn" onclick="goPage(${currentPage - 1})" ${currentPage === 1 ? "disabled" : ""}>← 上一頁</button>`;
+  for (let i = 1; i <= totalPages; i++) {
+    html += `<button class="page-btn ${i === currentPage ? "active" : ""}" onclick="goPage(${i})">${i}</button>`;
+  }
+  html += `<button class="page-btn" onclick="goPage(${currentPage + 1})" ${currentPage === totalPages ? "disabled" : ""}>下一頁 →</button>`;
+  html += `<span class="page-info">第 ${currentPage} / ${totalPages} 頁，共 ${total} 本</span>`;
+  pag.innerHTML = html;
 }
 
 // ── Render List ─────────────────────────────────────────────
@@ -173,7 +199,10 @@ function renderBooks() {
     ? BOOKS
     : BOOKS.filter(b => b.tags.includes(activeFilter) || b.category === activeFilter);
 
-  list.innerHTML = filtered.map(book => buildRow(book)).join("");
+  const start = (currentPage - 1) * BOOKS_PER_PAGE;
+  const page = filtered.slice(start, start + BOOKS_PER_PAGE);
+  list.innerHTML = page.map(book => buildRow(book)).join("");
+  renderPagination(filtered.length);
 }
 
 function buildRow(book) {

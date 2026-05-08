@@ -3,10 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>私人書庫 · 借閱系統</title>
-  <meta name="description" content="私人書庫借閱系統，以 Google 帳號登入即可借閱">
+  <title>陳怡伶的書庫 · 借閱系統</title>
+  <meta name="description" content="陳怡伶的私人書庫借閱系統，以 Google 帳號登入即可借閱">
 
-  <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
 
@@ -23,9 +22,22 @@
   <header>
     <div class="header-content">
       <div class="logo">
-        <span class="logo-icon">📚</span>
+        <svg class="logo-rabbit" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <ellipse cx="24" cy="30" rx="13" ry="11" fill="rgba(255,255,255,0.18)" stroke="rgba(255,255,255,0.7)" stroke-width="1.5"/>
+          <ellipse cx="16" cy="14" rx="4" ry="9" fill="rgba(255,255,255,0.18)" stroke="rgba(255,255,255,0.7)" stroke-width="1.5"/>
+          <ellipse cx="32" cy="14" rx="4" ry="9" fill="rgba(255,255,255,0.18)" stroke="rgba(255,255,255,0.7)" stroke-width="1.5"/>
+          <ellipse cx="17" cy="14" rx="2" ry="6" fill="rgba(255,182,193,0.6)"/>
+          <ellipse cx="31" cy="14" rx="2" ry="6" fill="rgba(255,182,193,0.6)"/>
+          <circle cx="20" cy="30" r="1.5" fill="rgba(255,255,255,0.9)"/>
+          <circle cx="28" cy="30" r="1.5" fill="rgba(255,255,255,0.9)"/>
+          <ellipse cx="24" cy="33" rx="2.5" ry="1.5" fill="rgba(255,182,193,0.7)"/>
+          <line x1="18" y1="33" x2="12" y2="35" stroke="rgba(255,255,255,0.6)" stroke-width="1" stroke-linecap="round"/>
+          <line x1="18" y1="34" x2="12" y2="36" stroke="rgba(255,255,255,0.6)" stroke-width="1" stroke-linecap="round"/>
+          <line x1="30" y1="33" x2="36" y2="35" stroke="rgba(255,255,255,0.6)" stroke-width="1" stroke-linecap="round"/>
+          <line x1="30" y1="34" x2="36" y2="36" stroke="rgba(255,255,255,0.6)" stroke-width="1" stroke-linecap="round"/>
+        </svg>
         <div>
-          <h1>私人書庫</h1>
+          <h1>陳怡伶的書庫</h1>
           <p>借閱系統</p>
         </div>
       </div>
@@ -38,7 +50,7 @@
     </div>
   </header>
 
-  <!-- User Status Bar (visible when logged in) -->
+  <!-- User Status Bar -->
   <div class="user-status-bar" id="userStatusBar" style="display:none">
     <div class="container">
       <span id="welcomeMsg">歡迎回來！</span>
@@ -55,7 +67,7 @@
 
       <!-- Filter Bar -->
       <div class="filter-bar">
-        <span class="filter-label">篩選分類：</span>
+        <span class="filter-label">分類：</span>
         <div class="filter-buttons">
           <button class="filter-btn active" onclick="filterBooks('all')">全部</button>
           <button class="filter-btn" onclick="filterBooks('心理')">心理</button>
@@ -64,6 +76,7 @@
           <button class="filter-btn" onclick="filterBooks('心靈')">心靈</button>
           <button class="filter-btn" onclick="filterBooks('宗教')">宗教</button>
           <button class="filter-btn" onclick="filterBooks('勵志')">勵志</button>
+          <button class="filter-btn" onclick="filterBooks('商業')">商業</button>
           <button class="filter-btn" onclick="filterBooks('英文')">英文</button>
           <button class="filter-btn" onclick="filterBooks('時尚')">時尚</button>
           <button class="filter-btn" onclick="filterBooks('生活')">生活</button>
@@ -71,9 +84,10 @@
       </div>
 
       <!-- Books List -->
-      <div class="books-list" id="booksList">
-        <!-- Rendered by app.js -->
-      </div>
+      <div class="books-list" id="booksList"></div>
+
+      <!-- Pagination -->
+      <div class="pagination" id="pagination"></div>
 
     </div>
   </main>
@@ -104,7 +118,8 @@
   <div class="toast" id="toast"></div>
 
   <footer>
-    <p>© 2026 私人書庫借閱系統 &nbsp;·&nbsp; 以 Google 帳號登入即可借閱 &nbsp;·&nbsp; 共 18 本藏書</p>
+    <div class="footer-rabbit">🐇</div>
+    <p>陳怡伶的書庫 &nbsp;·&nbsp; 共 45 本藏書 &nbsp;·&nbsp; 以 Google 帳號登入即可借閱</p>
   </footer>
 
   <script src="js/books-data.js"></script>
