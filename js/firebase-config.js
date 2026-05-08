@@ -1,17 +1,11 @@
-// ============================================================
-//  Firebase 設定
-//  請至 https://console.firebase.google.com 建立專案後
-//  將下方設定值替換為你的 Firebase 專案設定
-// ============================================================
-
 const FIREBASE_CONFIG = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT_ID.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyAD2g0CQn9xoR_oHoUJ0-7jcVVXGfqQQxQ",
+  authDomain: "book-library-bdf50.firebaseapp.com",
+  projectId: "book-library-bdf50",
+  storageBucket: "book-library-bdf50.firebasestorage.app",
+  messagingSenderId: "307357089008",
+  appId: "1:307357089008:web:de31b7cf9fc33e75f69635",
+  measurementId: "G-8CTBLV8WCZ"
 };
 
-// 偵測是否已完成設定
-const FIREBASE_CONFIGURED = FIREBASE_CONFIG.apiKey !== "YOUR_API_KEY";
+const FIREBASE_CONFIGURED = true;
