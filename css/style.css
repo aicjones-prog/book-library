@@ -49,9 +49,9 @@ header {
   height: 66px;
   gap: 16px;
 }
-.logo { display: flex; align-items: center; gap: 12px; }
+.logo { display: flex; align-items: center; gap: 12px; flex-shrink: 0; white-space: nowrap; }
 .logo-rabbit { width: 44px; height: 44px; flex-shrink: 0; }
-.logo h1 { font-size: 1.15rem; font-weight: 700; letter-spacing: 0.06em; }
+.logo h1 { font-size: 1.15rem; font-weight: 700; letter-spacing: 0.06em; white-space: nowrap; }
 .logo p { font-size: 0.68rem; opacity: 0.6; letter-spacing: 0.12em; margin-top: 1px; }
 
 .btn-signin {
