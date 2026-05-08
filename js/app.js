@@ -2,33 +2,27 @@
 let currentUser = null;
 let db = null;
 let auth = null;
-let borrowStatus = {}; // { bookId: { borrowedBy, borrowerName, borrowedAt } }
+let borrowStatus = {};
 let activeFilter = "all";
 let unsubscribeBorrows = null;
+const coverCache = JSON.parse(localStorage.getItem("bookCovers") || "{}");
 
 // ── Firebase Init ───────────────────────────────────────────
 function initFirebase() {
-  if (!FIREBASE_CONFIGURED) {
-    showSetupBanner();
-    renderBooks();
-    return;
-  }
+  if (!FIREBASE_CONFIGURED) { showSetupBanner(); renderBooks(); loadAllCovers(); return; }
   firebase.initializeApp(FIREBASE_CONFIG);
   auth = firebase.auth();
   db = firebase.firestore();
-
   auth.onAuthStateChanged(user => {
     currentUser = user;
     updateAuthUI();
-    if (user) {
-      subscribeToBorows();
-    } else {
+    if (user) subscribeToBorows();
+    else {
       if (unsubscribeBorrows) { unsubscribeBorrows(); unsubscribeBorrows = null; }
       borrowStatus = {};
       renderBooks();
     }
   });
-
   subscribeToBorows();
 }
 
@@ -37,9 +31,7 @@ function subscribeToBorows() {
   if (unsubscribeBorrows) unsubscribeBorrows();
   unsubscribeBorrows = db.collection("borrows").onSnapshot(snap => {
     borrowStatus = {};
-    snap.forEach(doc => {
-      borrowStatus[doc.id] = doc.data();
-    });
+    snap.forEach(doc => { borrowStatus[doc.id] = doc.data(); });
     renderBooks();
     updateBorrowCount();
   });
@@ -48,8 +40,8 @@ function subscribeToBorows() {
 // ── Auth ────────────────────────────────────────────────────
 function signIn() {
   if (!FIREBASE_CONFIGURED) { showToast("請先完成 Firebase 設定（見 README）", "warn"); return; }
-  const provider = new firebase.auth.GoogleAuthProvider();
-  auth.signInWithPopup(provider).catch(err => showToast("登入失敗：" + err.message, "error"));
+  auth.signInWithPopup(new firebase.auth.GoogleAuthProvider())
+    .catch(err => showToast("登入失敗：" + err.message, "error"));
 }
 
 function signOut() {
@@ -58,16 +50,15 @@ function signOut() {
 
 function updateAuthUI() {
   const signinBtn = document.getElementById("signinBtn");
-  const userStatusBar = document.getElementById("userStatusBar");
-  const welcomeMsg = document.getElementById("welcomeMsg");
-
+  const bar = document.getElementById("userStatusBar");
   if (currentUser) {
     signinBtn.style.display = "none";
-    userStatusBar.style.display = "flex";
-    welcomeMsg.innerHTML = `<img src="${currentUser.photoURL || ''}" class="avatar" onerror="this.style.display='none'"> 歡迎，${currentUser.displayName || currentUser.email}`;
+    bar.style.display = "flex";
+    document.getElementById("welcomeMsg").innerHTML =
+      `<img src="${currentUser.photoURL || ""}" class="avatar" onerror="this.style.display='none'"> 歡迎，${currentUser.displayName || currentUser.email}`;
   } else {
     signinBtn.style.display = "flex";
-    userStatusBar.style.display = "none";
+    bar.style.display = "none";
   }
 }
 
@@ -82,7 +73,6 @@ async function borrowBook(bookId) {
   if (!currentUser) { showToast("請先以 Google 帳號登入", "warn"); return; }
   const status = borrowStatus[bookId];
   if (status && status.borrowedBy) { showToast("此書目前已被借出", "warn"); return; }
-
   try {
     await db.collection("borrows").doc(bookId).set({
       borrowedBy: currentUser.uid,
@@ -92,9 +82,8 @@ async function borrowBook(bookId) {
     });
     const book = BOOKS.find(b => b.id === bookId);
     showToast(`✓ 成功借閱《${book.title}》`);
-  } catch (err) {
-    showToast("借閱失敗：" + err.message, "error");
-  }
+    closeDetailModal();
+  } catch (err) { showToast("借閱失敗：" + err.message, "error"); }
 }
 
 async function returnBook(bookId) {
@@ -107,75 +96,115 @@ async function returnBook(bookId) {
     await db.collection("borrows").doc(bookId).delete();
     const book = BOOKS.find(b => b.id === bookId);
     showToast(`✓ 已歸還《${book.title}》`);
-  } catch (err) {
-    showToast("歸還失敗：" + err.message, "error");
-  }
+    closeDetailModal();
+  } catch (err) { showToast("歸還失敗：" + err.message, "error"); }
 }
 
-// ── Render ──────────────────────────────────────────────────
+// ── Cover Images ────────────────────────────────────────────
+async function fetchGoogleCover(book) {
+  const q = book.isbn
+    ? `isbn:${book.isbn}`
+    : encodeURIComponent(book.googleQuery || `${book.title} ${book.author}`);
+  try {
+    const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${q}&maxResults=1`);
+    const data = await res.json();
+    const thumb = data.items?.[0]?.volumeInfo?.imageLinks?.thumbnail;
+    if (thumb) return thumb.replace("http:", "https:").replace("zoom=1", "zoom=2");
+  } catch (_) {}
+  return null;
+}
+
+async function loadAllCovers() {
+  const tasks = BOOKS.map(async book => {
+    if (coverCache[book.id]) {
+      applyBookCover(book.id, coverCache[book.id]);
+      return;
+    }
+    // Priority 1: books.com.tw CDN
+    if (book.booksTwId) {
+      const url = buildBooksTwCover(book.booksTwId);
+      coverCache[book.id] = url;
+      applyBookCover(book.id, url);
+      return;
+    }
+    // Priority 2: Google Books API
+    const url = await fetchGoogleCover(book);
+    if (url) {
+      coverCache[book.id] = url;
+      applyBookCover(book.id, url);
+    }
+  });
+  await Promise.all(tasks);
+  localStorage.setItem("bookCovers", JSON.stringify(coverCache));
+}
+
+function applyBookCover(bookId, url) {
+  document.querySelectorAll(`[data-cover="${bookId}"]`).forEach(img => {
+    img.src = url;
+    img.style.display = "block";
+    const placeholder = img.previousElementSibling;
+    if (placeholder && placeholder.classList.contains("cover-placeholder")) {
+      placeholder.style.display = "none";
+    }
+  });
+}
+
+// ── Filter ──────────────────────────────────────────────────
 function filterBooks(genre) {
   activeFilter = genre;
   document.querySelectorAll(".filter-btn").forEach(btn => btn.classList.remove("active"));
   event.target.classList.add("active");
   renderBooks();
+  setTimeout(loadAllCovers, 50);
 }
 
+// ── Render List ─────────────────────────────────────────────
 function renderBooks() {
-  const grid = document.getElementById("booksGrid");
+  const list = document.getElementById("booksList");
   const filtered = activeFilter === "all"
     ? BOOKS
-    : BOOKS.filter(b => b.tags.includes(activeFilter));
+    : BOOKS.filter(b => b.tags.includes(activeFilter) || b.category === activeFilter);
 
-  grid.innerHTML = filtered.map(book => buildCard(book)).join("");
+  list.innerHTML = filtered.map(book => buildRow(book)).join("");
 }
 
-function buildCard(book) {
+function buildRow(book) {
   const status = borrowStatus[book.id];
   const isBorrowed = status && status.borrowedBy;
   const isMyBook = isBorrowed && currentUser && status.borrowedBy === currentUser.uid;
-  const borrowedAt = status && status.borrowedAt
-    ? new Date(status.borrowedAt.seconds * 1000).toLocaleDateString("zh-TW")
-    : "";
 
-  let btnHtml = "";
-  if (!FIREBASE_CONFIGURED) {
-    btnHtml = `<button class="btn-borrow disabled" disabled>需設定 Firebase</button>`;
-  } else if (isMyBook) {
-    btnHtml = `<button class="btn-return" onclick="returnBook('${book.id}')">歸還此書</button>`;
-  } else if (isBorrowed) {
-    btnHtml = `<button class="btn-borrow disabled" disabled>已被借出</button>`;
-  } else {
-    btnHtml = `<button class="btn-borrow" onclick="${currentUser ? `borrowBook('${book.id}')` : 'signIn()'}">
-      ${currentUser ? "立即借閱" : "登入後借閱"}
-    </button>`;
-  }
-
-  const statusBadge = isMyBook
+  const badge = isMyBook
     ? `<span class="badge badge-mine">我借閱中</span>`
     : isBorrowed
     ? `<span class="badge badge-out">已借出</span>`
     : `<span class="badge badge-avail">可借閱</span>`;
 
+  const cached = coverCache[book.id];
+  const imgHtml = `
+    <div class="cover-placeholder" style="background:${book.color}">${book.title.slice(0, 2)}</div>
+    <img class="cover-img" data-cover="${book.id}"
+         src="${cached || ""}"
+         style="display:${cached ? "block" : "none"}"
+         onerror="this.style.display='none';this.previousElementSibling.style.display='flex'"
+         alt="${book.title} 封面">
+  `;
+
   return `
-    <div class="book-card ${isBorrowed && !isMyBook ? 'card-unavailable' : ''}" onclick="showBookDetail('${book.id}')">
-      <div class="card-header" style="background:${book.color}">
-        <div class="card-title-area">
-          <h3 class="card-title">${book.title}</h3>
-          <p class="card-author">${book.author}</p>
+    <div class="book-row ${isBorrowed && !isMyBook ? "row-unavail" : ""}"
+         onclick="showBookDetail('${book.id}')">
+      <div class="cover-wrap">${imgHtml}</div>
+      <div class="row-info">
+        <div class="row-main">
+          <h3 class="row-title">${book.title}</h3>
+          <p class="row-author">${book.author}</p>
+          <div class="row-tags">
+            ${book.tags.slice(0, 3).map(t => `<span class="tag">${t}</span>`).join("")}
+          </div>
         </div>
-        ${statusBadge}
-      </div>
-      <div class="card-body">
-        <div class="card-tags">
-          ${book.tags.map(t => `<span class="tag">${t}</span>`).join("")}
+        <div class="row-side">
+          ${badge}
+          <span class="row-cat">${book.category}</span>
         </div>
-        <p class="card-highlight">💡 ${book.highlight}</p>
-        <p class="card-summary">${book.summary.slice(0, 80)}…</p>
-        ${isMyBook && borrowedAt ? `<p class="borrow-date">借閱日期：${borrowedAt}</p>` : ""}
-        ${isBorrowed && !isMyBook ? `<p class="borrowed-by">借閱者：${status.borrowerName || "匿名"}</p>` : ""}
-      </div>
-      <div class="card-footer" onclick="event.stopPropagation()">
-        ${btnHtml}
       </div>
     </div>
   `;
@@ -188,28 +217,51 @@ function showBookDetail(bookId) {
   const status = borrowStatus[bookId];
   const isBorrowed = status && status.borrowedBy;
   const isMyBook = isBorrowed && currentUser && status.borrowedBy === currentUser.uid;
+  const borrowedAt = status?.borrowedAt
+    ? new Date(status.borrowedAt.seconds * 1000).toLocaleDateString("zh-TW")
+    : "";
+
+  let actionBtn = "";
+  if (!FIREBASE_CONFIGURED) {
+    actionBtn = `<button class="btn-borrow disabled btn-large" disabled>需設定 Firebase</button>`;
+  } else if (isMyBook) {
+    actionBtn = `<button class="btn-return btn-large" onclick="returnBook('${bookId}')">歸還此書</button>`;
+  } else if (isBorrowed) {
+    actionBtn = `<button class="btn-borrow disabled btn-large" disabled>目前已被借出（${status.borrowerName || "匿名"}）</button>`;
+  } else {
+    actionBtn = `<button class="btn-borrow btn-large" onclick="${currentUser ? `borrowBook('${bookId}')` : "signIn()"}">
+      ${currentUser ? "立即借閱" : "以 Google 帳號登入借閱"}
+    </button>`;
+  }
+
+  const coverUrl = coverCache[bookId] || "";
 
   document.getElementById("modalBookTitle").textContent = book.title;
   document.getElementById("modalBookContent").innerHTML = `
-    <div class="detail-header" style="background:${book.color}">
-      <p class="detail-author">✍ ${book.author}</p>
-      <p class="detail-publisher">出版：${book.publisher || "—"}</p>
-      <div class="card-tags">${book.tags.map(t => `<span class="tag tag-light">${t}</span>`).join("")}</div>
+    <div class="detail-top" style="background:${book.color}">
+      <div class="detail-cover-wrap">
+        <div class="detail-cover-placeholder" style="display:${coverUrl ? "none" : "flex"}">${book.title.slice(0, 2)}</div>
+        <img class="detail-cover-img" data-cover="${book.id}"
+             src="${coverUrl}"
+             style="display:${coverUrl ? "block" : "none"}"
+             onerror="this.style.display='none';this.previousElementSibling.style.display='flex'"
+             alt="${book.title} 封面">
+      </div>
+      <div class="detail-meta">
+        <p class="detail-author">✍ ${book.author}</p>
+        ${book.translator ? `<p class="detail-pub">${book.translator}</p>` : ""}
+        <p class="detail-pub">出版：${book.publisher || "—"}</p>
+        <div class="row-tags" style="margin-top:8px">
+          ${book.tags.map(t => `<span class="tag tag-light">${t}</span>`).join("")}
+        </div>
+        ${isMyBook && borrowedAt ? `<p class="detail-borrow-date">借閱日期：${borrowedAt}</p>` : ""}
+      </div>
     </div>
     <div class="detail-body">
-      <h4>內容簡介</h4>
-      <p>${book.summary}</p>
       <div class="detail-highlight">💡 ${book.highlight}</div>
-      <div class="detail-action">
-        ${isMyBook
-          ? `<button class="btn-return btn-large" onclick="returnBook('${book.id}'); closeDetailModal()">歸還此書</button>`
-          : isBorrowed
-          ? `<button class="btn-borrow disabled btn-large" disabled>目前已被借出（${status.borrowerName || "匿名"}）</button>`
-          : `<button class="btn-borrow btn-large" onclick="${currentUser ? `borrowBook('${book.id}'); closeDetailModal()` : 'signIn()'}">
-              ${currentUser ? "立即借閱" : "以 Google 帳號登入借閱"}
-            </button>`
-        }
-      </div>
+      <h4>內容簡介</h4>
+      <p class="detail-summary">${book.summary}</p>
+      <div class="detail-action">${actionBtn}</div>
     </div>
   `;
   document.getElementById("bookDetailModal").style.display = "flex";
@@ -226,7 +278,6 @@ function showMyBooks() {
     const s = borrowStatus[b.id];
     return s && s.borrowedBy === currentUser.uid;
   });
-
   const listEl = document.getElementById("myBooksList");
   if (myBooks.length === 0) {
     listEl.innerHTML = `<p class="empty-state">目前沒有借閱中的書籍</p>`;
@@ -243,16 +294,12 @@ function showMyBooks() {
             <strong>${book.title}</strong>
             <span>${book.author} · 借閱日期：${date}</span>
           </div>
-          <button class="btn-return btn-sm" onclick="returnBook('${book.id}'); updateMyBooksModal()">歸還</button>
+          <button class="btn-return btn-sm" onclick="returnBook('${book.id}'); setTimeout(showMyBooks, 600)">歸還</button>
         </div>
       `;
     }).join("");
   }
   document.getElementById("myBooksModal").style.display = "flex";
-}
-
-function updateMyBooksModal() {
-  setTimeout(showMyBooks, 500);
 }
 
 function closeModal() {
@@ -263,11 +310,8 @@ function closeModal() {
 function showSetupBanner() {
   const banner = document.createElement("div");
   banner.className = "setup-banner";
-  banner.innerHTML = `
-    <strong>⚙️ 需要設定 Firebase</strong>
-    請參閱 <a href="README.md" target="_blank">README.md</a> 完成 Firebase 設定後，此網站即可啟用 Google 登入與借閱功能。
-  `;
-  document.body.insertBefore(banner, document.querySelector("main"));
+  banner.innerHTML = `⚙️ <strong>需要設定 Firebase</strong>　請參閱 <a href="README.md" target="_blank">README.md</a> 完成設定，即可啟用 Google 登入與借閱功能。`;
+  document.querySelector("main").prepend(banner);
 }
 
 // ── Toast ───────────────────────────────────────────────────
@@ -281,5 +325,6 @@ function showToast(msg, type = "success") {
 // ── Init ────────────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", () => {
   renderBooks();
+  loadAllCovers();
   initFirebase();
 });
