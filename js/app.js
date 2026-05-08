@@ -93,6 +93,14 @@ async function returnBook(bookId) {
     showToast("只能歸還自己借閱的書", "warn"); return;
   }
   try {
+    await db.collection("borrow_history").add({
+      bookId,
+      borrowedBy: status.borrowedBy,
+      borrowerName: status.borrowerName || "",
+      borrowerPhoto: status.borrowerPhoto || "",
+      borrowedAt: status.borrowedAt || null,
+      returnedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
     await db.collection("borrows").doc(bookId).delete();
     const book = BOOKS.find(b => b.id === bookId);
     showToast(`✓ 已歸還《${book.title}》`);
